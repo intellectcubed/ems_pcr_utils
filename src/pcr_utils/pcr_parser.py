@@ -44,7 +44,7 @@ class PCRParser:
         # Load prompt
         if prompt_file is None:
             # Default to prompt file in same directory as this script
-            prompt_file = Path(__file__).parent / 'pcr_parse_prompt.txt'
+            prompt_file = Path(__file__).parent / 'pcr_parse_prompt.md'
 
         self.prompt_file = Path(prompt_file)
         if not self.prompt_file.exists():
