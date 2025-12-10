@@ -8,12 +8,22 @@ You are analyzing an EMS dispatch document (rip-and-run) and need to extract spe
 - Locate the incident number field (commonly labeled as "CAD", "Incident #", or similar)
 - Extract this value as the "cad" field
 
-### 2. Dispatch Time
+### 2. Unit Dispatched
+- Find the "Unit Dispatched" field in the document
+- Extract the unit identifier (e.g., "43C1", "43B1")
+- This is the primary unit for this incident
+
+### 3. Incident Type
+- Find the "Incident Type" field in the document
+- Extract the value as-is (e.g., "EMS", "FIRE", "MEDICAL")
+- This indicates the type of emergency response
+
+### 4. Dispatch Time
 - Find the datetime under "Dispatch Time"
 - This maps to "notifiedByDispatch" in the output
 - Split into separate "date" (mm/dd/yyyy) and "time" (hh:mm:ss) fields
 
-### 3. Location Parsing
+### 5. Location Parsing
 Extract location text under **"Location"** from PDF.
 
 **incidentLocation object:**
@@ -61,13 +71,16 @@ Extract location text under **"Location"** from PDF.
    - territory: BRIDGEWATER TWP
    - street_address: COLUMBIA DR & MORGAN LN
 
-### 4. Unit Activity Table
+### 6. Unit Activity Table
 - Find the table (typically at bottom of page) with columns: "Unit ID", "Date / Time", "Status", "Dispatcher"
+- The first column is "UNIT ID" - there may be multiple units listed in this table
+- **IMPORTANT**: Only extract times for rows where the UNIT ID matches the unit from "Unit Dispatched" (from step 2)
+- Disregard all rows with different UNIT IDs
 - Extract Date/Time values in format mm/dd/yyyy hh:mm:ss
 - Split each into separate "date" and "time" fields
-- Ignore "Unit ID" and "Dispatcher" columns
+- Ignore "Dispatcher" column
 
-### 5. Status Mapping
+### 7. Status Mapping
 Map these STATUS values to JSON fields:
 - RESP → enRoute
 - ONLOC → onScene
@@ -75,13 +88,13 @@ Map these STATUS values to JSON fields:
 - AT HOSP → ptArrivedAtDestination
 - CLEAR → backInService
 
-### 6. Multiple Occurrences
+### 8. Multiple Occurrences
 - If a status appears multiple times, use the FIRST occurrence
 
-### 7. Missing Statuses
+### 9. Missing Statuses
 - If a status is not found in the table, omit that field from the JSON
 
-### 8. Calculated Fields
+### 10. Calculated Fields
 Only if not present in document:
 - `arrivedAtPatient`: Calculate as 2 minutes after onScene if not explicitly stated
 - `destinationPatientTransferOfCare`: Calculate as 5 minutes after ptArrivedAtDestination if not explicitly stated
@@ -94,6 +107,8 @@ Return ONLY valid JSON in this exact structure (omit fields that are not found):
 {
   "incidentTimes": {
     "cad": "string",
+    "unit_dispatched": "string",
+    "incident_type": "string",
     "times": {
       "notifiedByDispatch": {
         "date": "mm/dd/yyyy",

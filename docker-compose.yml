@@ -1,0 +1,58 @@
+services:
+  # Email Poller Service - Monitors Yahoo Mail for fax attachments
+  email-poller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_FROM_GITHUB: "false"
+    image: pcr-utils:latest
+    container_name: pcr-email-poller
+    command: python -m src.pcr_utils.yahoo_mail_poller
+    env_file:
+      - .env
+    environment:
+      # Override defaults if needed
+      - WATCH_DIR=/data/watch
+      - EMAIL_POLL_INTERVAL_SECONDS=${EMAIL_POLL_INTERVAL_SECONDS:-300}
+    volumes:
+      # Shared watch directory - email poller writes PDFs here
+      - ./data/watch:/data/watch
+      # State directory for tracking processed emails
+      - ./data/state:/root/.pcr_utils
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PCR Parser Service - Processes PDFs and saves to database
+  pcr-parser:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_FROM_GITHUB: "false"
+    image: pcr-utils:latest
+    container_name: pcr-parser
+    command: python -m src.pcr_utils.pcr_parser
+    env_file:
+      - .env
+    environment:
+      # Override defaults if needed
+      - WATCH_DIR=/data/watch
+      - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-30}
+    volumes:
+      # Shared watch directory - reads PDFs from here
+      - ./data/watch:/data/watch
+      # Error directory for failed PDFs
+      - ./data/errors:/data/errors
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - email-poller
