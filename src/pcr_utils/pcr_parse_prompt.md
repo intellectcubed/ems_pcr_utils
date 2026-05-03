@@ -73,31 +73,48 @@ Extract location text under **"Location"** from PDF.
 
 ### 6. Unit Activity Table
 - Find the table (typically at bottom of page) with columns: "Unit ID", "Date / Time", "Status", "Dispatcher"
-- The first column is "UNIT ID" - there may be multiple units listed in this table
-- **IMPORTANT**: Only extract times for rows where the UNIT ID matches the unit from "Unit Dispatched" (from step 2)
-- Disregard all rows with different UNIT IDs
-- Extract Date/Time values in format mm/dd/yyyy hh:mm:ss
-- Split each into separate "date" and "time" fields
-- Ignore "Dispatcher" column
+- The table often contains rows for **multiple responding units** — only extract rows where the Unit ID exactly matches "Unit Dispatched" (step 2); ignore all other units
+- Extract Date/Time values in format mm/dd/yyyy hh:mm:ss and split into separate "date" and "time" fields
+- Ignore the "Dispatcher" column
+
+**Example** — Unit Dispatched is `43BLS2`:
+
+| Unit   | Date/Time           | Status | Dispatcher |
+|--------|---------------------|--------|------------|
+| 43C1   | 05/01/2026 23:30:33 | RESP   |            |
+| 43BLS2 | 05/01/2026 23:31:33 | RESP   |            |
+| 43BLS2 | 05/01/2026 23:31:31 | ONLOC  |            |
+| 43C1   | 05/01/2026 23:30:33 | ONLOC  |            |
+| 43BLS2 | 05/01/2026 23:41:33 | CLEAR  |            |
+
+All `43C1` rows are ignored. Only the three `43BLS2` rows are extracted.
 
 ### 7. Status Mapping
-Map these STATUS values to JSON fields:
-- RESP → enRoute
-- ONLOC → onScene
-- TO HOSP → leftScene
-- AT HOSP → ptArrivedAtDestination
-- CLEAR → backInService
+Map these STATUS values to JSON fields — the STATUS column text must match exactly:
+- `RESP` → enRoute
+- `ONLOC` → onScene
+- `TO HOSP` → leftScene *(crew leaving the scene to transport patient to hospital)*
+- `AT HOSP` → ptArrivedAtDestination *(crew arrives at hospital with patient)*
+- `LV HOSP` → crewLeftDestination *(crew leaving the hospital after dropping off patient — do NOT map this to leftScene)*
+- `CLEAR` → backInService
+
+**Critical distinction — `TO HOSP` vs `LV HOSP`:**
+- `TO HOSP` = the unit is departing the incident scene heading to the hospital → `leftScene`
+- `LV HOSP` = the unit is departing the hospital after delivering the patient → `crewLeftDestination`
+- These are two different events. Never map `LV HOSP` to `leftScene`.
+
+**Note on hospital transport:** Not all responses involve transporting to the hospital. RESP and CLEAR will always appear. ONLOC, TO HOSP, AT HOSP, and LV HOSP may be absent if they were not captured or did not occur.
+
+- Only include `leftScene` if a `TO HOSP` row is explicitly present in the Unit Activity Table. Never calculate, infer, or copy another time into `leftScene`.
+- If TO HOSP is not present, omit `leftScene`, `ptArrivedAtDestination`, `destinationPatientTransferOfCare`, and `crewLeftDestination` entirely.
+- A typical transport response: RESP → ONLOC → TO HOSP → AT HOSP → LV HOSP → CLEAR
+- A typical non-transport response: RESP → ONLOC → CLEAR
 
 ### 8. Multiple Occurrences
 - If a status appears multiple times, use the FIRST occurrence
 
 ### 9. Missing Statuses
 - If a status is not found in the table, omit that field from the JSON
-
-### 10. Calculated Fields
-Only if not present in document:
-- `arrivedAtPatient`: Calculate as 2 minutes after onScene if not explicitly stated
-- `destinationPatientTransferOfCare`: Calculate as 5 minutes after ptArrivedAtDestination if not explicitly stated
 
 ## REQUIRED OUTPUT FORMAT
 

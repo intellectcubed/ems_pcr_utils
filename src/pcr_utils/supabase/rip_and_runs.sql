@@ -7,6 +7,8 @@ create table public.rip_and_runs (
   incident_date     timestamptz not null,
   location          varchar(300),
   incident_type     varchar(20),
+  pdf_url           text,
+  parse_errors      text,
 
   -- Composite primary key
   constraint rip_and_runs_pkey primary key (incident_number, unit_id)

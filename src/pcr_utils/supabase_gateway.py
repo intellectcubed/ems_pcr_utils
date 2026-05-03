@@ -20,25 +20,29 @@ logger = logging.getLogger(__name__)
 
 class SupabaseGateway:
     """
-    Gateway class for interacting with Supabase database.
+    Gateway class for interacting with Supabase database and Storage.
 
-    Handles insertion and updating of parsed PCR data into the rip_and_runs table.
+    Handles insertion and updating of parsed PCR data into the rip_and_runs table,
+    and uploading source PDFs to Supabase Storage.
     """
+
+    STORAGE_BUCKET = 'pcr-pdfs'
 
     def __init__(self, url: Optional[str] = None, key: Optional[str] = None):
         """
         Initialize the Supabase gateway.
 
         Args:
-            url: Supabase project URL. If None, will read from SUPABASE_URL env variable
-            key: Supabase API key. If None, will read from SUPABASE_KEY env variable
+            url: Supabase project URL. If None, reads SUPABASE_URL env variable
+            key: Supabase API key. If None, prefers SUPABASE_SERVICE_KEY (bypasses RLS),
+                 falls back to SUPABASE_KEY (anon key, subject to RLS policies)
 
         Raises:
             ValueError: If credentials are not provided and not found in environment
         """
-        # Get credentials from parameters or environment
         self.url = url or os.getenv('SUPABASE_URL')
-        self.key = key or os.getenv('SUPABASE_KEY')
+        # Service role key bypasses RLS — required for Storage uploads and unrestricted DB access
+        self.key = key or os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_KEY')
 
         if not self.url:
             raise ValueError(
@@ -60,7 +64,33 @@ class SupabaseGateway:
             logger.error(f"Failed to initialize Supabase client: {e}")
             raise
 
-    def upsert_pcr_data(self, pcr_json: Dict[str, Any], unit_id: Optional[str] = None) -> Dict[str, Any]:
+    def upload_pdf(self, pdf_path: str, incident_number: int) -> Optional[str]:
+        """
+        Upload a PDF to Supabase Storage.
+
+        Args:
+            pdf_path: Local path to the PDF file
+            incident_number: Used as the storage filename ({incident_number}.pdf)
+
+        Returns:
+            Public URL of the uploaded file, or None on failure
+        """
+        storage_path = f'{incident_number}.pdf'
+        try:
+            with open(pdf_path, 'rb') as f:
+                self.client.storage.from_(self.STORAGE_BUCKET).upload(
+                    path=storage_path,
+                    file=f.read(),
+                    file_options={'content-type': 'application/pdf', 'upsert': 'true'},
+                )
+            url = self.client.storage.from_(self.STORAGE_BUCKET).get_public_url(storage_path)
+            logger.info(f"PDF uploaded to storage: {storage_path}")
+            return url
+        except Exception as e:
+            logger.error(f"Failed to upload PDF to storage: {e}")
+            return None
+
+    def upsert_pcr_data(self, pcr_json: Dict[str, Any], unit_id: Optional[str] = None, pdf_url: Optional[str] = None, parse_errors: Optional[str] = None) -> Dict[str, Any]:
         """
         Insert or update parsed PCR data in the rip_and_runs table.
 
@@ -87,7 +117,7 @@ class SupabaseGateway:
                     raise KeyError('incidentTimes.unit_dispatched not found and unit_id not provided')
 
             # Prepare the record for database insertion
-            record = self._prepare_record(pcr_json, unit_id)
+            record = self._prepare_record(pcr_json, unit_id, pdf_url=pdf_url, parse_errors=parse_errors)
 
             logger.info(f"Upserting PCR data for incident {record['incident_number']}, unit {unit_id}")
 
@@ -117,7 +147,7 @@ class SupabaseGateway:
                 'error': error_msg
             }
 
-    def _prepare_record(self, pcr_json: Dict[str, Any], unit_id: str) -> Dict[str, Any]:
+    def _prepare_record(self, pcr_json: Dict[str, Any], unit_id: str, pdf_url: Optional[str] = None, parse_errors: Optional[str] = None) -> Dict[str, Any]:
         """
         Transform PCR JSON to database record format.
 
@@ -186,7 +216,9 @@ class SupabaseGateway:
             'content': content,
             'incident_date': incident_date,
             'location': location,
-            'incident_type': incident_type
+            'incident_type': incident_type,
+            'pdf_url': pdf_url,
+            'parse_errors': parse_errors,
         }
 
         return record
@@ -217,6 +249,35 @@ class SupabaseGateway:
 
         except ValueError as e:
             raise ValueError(f"Failed to parse datetime '{date_str} {time_str}': {e}")
+
+
+    def get_incident_by_number(self, incident_number: int) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a rip_and_runs record by incident number.
+
+        Args:
+            incident_number: The CAD/incident number to look up
+
+        Returns:
+            The first matching record dict, or None if not found
+
+        Raises:
+            Exception: If the database query fails
+        """
+        try:
+            response = (
+                self.client.table('rip_and_runs')
+                .select('*')
+                .eq('incident_number', incident_number)
+                .limit(1)
+                .execute()
+            )
+            if response.data:
+                return response.data[0]
+            return None
+        except Exception as e:
+            logger.error(f"Failed to fetch incident {incident_number}: {e}")
+            raise
 
 
 if __name__ == "__main__":
