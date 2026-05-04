@@ -225,10 +225,7 @@ class GemmaPCRParser:
         # --- Step 2: fetch from Supabase ---
         print(f"\nStep 2: Fetching incident {incident_number} from Supabase…")
         try:
-            try:
-                from .supabase_gateway import SupabaseGateway
-            except ImportError:
-                from supabase_gateway import SupabaseGateway
+            from .supabase_gateway import SupabaseGateway
 
             gateway = SupabaseGateway()
             db_record = gateway.get_incident_by_number(incident_number)

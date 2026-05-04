@@ -236,10 +236,7 @@ class PCRPollingService:
             f.write(f"\nError message:\n{error_msg}\n")
 
     def _get_gateway(self):
-        try:
-            from .supabase_gateway import SupabaseGateway
-        except ImportError:
-            from supabase_gateway import SupabaseGateway
+        from .supabase_gateway import SupabaseGateway
         return SupabaseGateway()
 
     def _add_minutes(self, time_dict: Dict[str, str], minutes: int) -> Dict[str, str]:
@@ -689,16 +686,10 @@ if __name__ == '__main__':
 
     try:
         if backend == 'azure':
-            try:
-                from azure_pcr_parser import AzurePCRParser
-            except ImportError:
-                from pcr_utils.azure_pcr_parser import AzurePCRParser
+            from .azure_pcr_parser import AzurePCRParser
             parser = AzurePCRParser(prompt_text=prompt_text)
         else:
-            try:
-                from pcr_parser import PCRParser
-            except ImportError:
-                from pcr_utils.pcr_parser import PCRParser
+            from .pcr_parser import PCRParser
             parser = PCRParser(prompt_text=prompt_text)
     except Exception as e:
         logger.error(f"Failed to initialize {backend} parser: {e}")

@@ -15,6 +15,7 @@ services:
       # Override defaults if needed
       - WATCH_DIR=/data/watch
       - EMAIL_POLL_INTERVAL_SECONDS=${EMAIL_POLL_INTERVAL_SECONDS:-300}
+      - PARSER_BACKEND=azure
     volumes:
       # Shared watch directory - email poller writes PDFs here
       - ./data/watch:/data/watch
@@ -36,13 +37,14 @@ services:
         INSTALL_FROM_GITHUB: "false"
     image: pcr-utils:latest
     container_name: pcr-parser
-    command: python -m src.pcr_utils.pcr_parser
+    command: python -m src.pcr_utils.pcr_service
     env_file:
       - .env
     environment:
       # Override defaults if needed
       - WATCH_DIR=/data/watch
       - POLL_INTERVAL_SECONDS=${POLL_INTERVAL_SECONDS:-30}
+      - PARSER_BACKEND=azure
     volumes:
       # Shared watch directory - reads PDFs from here
       - ./data/watch:/data/watch
