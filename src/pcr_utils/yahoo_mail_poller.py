@@ -271,7 +271,7 @@ class YahooMailPoller:
 
     def _search_emails(self) -> List[str]:
         """
-        Search for READ emails matching our criteria.
+        Search for emails matching our criteria (read or unread).
         Returns up to MAX_EMAILS_PER_POLL most recent emails.
 
         Returns:
@@ -280,7 +280,7 @@ class YahooMailPoller:
         try:
             # Search for SEEN (read) emails from the target sender
             # Yahoo IMAP supports searching by FROM
-            search_criteria = f'(SEEN FROM "{self.TARGET_SENDER}")'
+            search_criteria = f'(FROM "{self.TARGET_SENDER}")'
             status, messages = self.imap.search(None, search_criteria)
 
             if status != 'OK':
